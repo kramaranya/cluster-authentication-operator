@@ -321,6 +321,7 @@ func Test_ensureOAuthClient(t *testing.T) {
 			oauthClientClient: newFakeOAuthClientClient(func(fake *fakeoauthclient.Clientset) {
 				fake.PrependReactor("get", "oauthclients", reactorErrorFunc)
 			}),
+			wantEnsureErr: true,
 			wantUpdateErr: true,
 		},
 		{
@@ -512,21 +513,19 @@ func Test_ensureOAuthClient(t *testing.T) {
 					t.Fatalf("got error: %v; want error: %v", updateErr, tt.wantUpdateErr)
 				}
 
-				expected := tt.oauthClient
 				if updateErr == nil {
-					expected = tt.updateOAuthClient
-				}
+					expected := tt.updateOAuthClient
+					updated, err := tt.oauthClientClient.Tracker().Get(
+						schema.GroupVersionResource{Group: oauthv1.GroupName, Version: oauthv1.GroupVersion.Version, Resource: "oauthclients"},
+						tt.updateOAuthClient.Namespace, tt.updateOAuthClient.Name,
+					)
+					if err != nil {
+						t.Fatal(err)
+					}
 
-				updated, err := tt.oauthClientClient.Tracker().Get(
-					schema.GroupVersionResource{Group: oauthv1.GroupName, Version: oauthv1.GroupVersion.Version, Resource: "oauthclients"},
-					tt.updateOAuthClient.Namespace, tt.updateOAuthClient.Name,
-				)
-				if err != nil {
-					t.Fatal(err)
-				}
-
-				if !equality.Semantic.DeepEqual(expected, updated) {
-					t.Errorf("client after update does not equal the expected one; got: %v; want: %v", updated, expected)
+					if !equality.Semantic.DeepEqual(expected, updated) {
+						t.Errorf("client after update does not equal the expected one; got: %v; want: %v", updated, expected)
+					}
 				}
 			}
 		})

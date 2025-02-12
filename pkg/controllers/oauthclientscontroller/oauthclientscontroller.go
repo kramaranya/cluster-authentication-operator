@@ -159,8 +159,12 @@ func randomBits(bits uint) []byte {
 }
 
 func ensureOAuthClient(ctx context.Context, oauthClients oauthclient.OAuthClientInterface, client oauthv1.OAuthClient) error {
-	_, err := oauthClients.Create(ctx, &client, metav1.CreateOptions{})
-	if err == nil || !apierrors.IsAlreadyExists(err) {
+	_, err := oauthClients.Get(ctx, client.Name, metav1.GetOptions{})
+	if err != nil {
+		if apierrors.IsNotFound(err) {
+			_, err = oauthClients.Create(ctx, &client, metav1.CreateOptions{})
+			return err
+		}
 		return err
 	}
 
