@@ -138,7 +138,7 @@ func (c *oauthsClientsController) ensureBootstrappedOAuthClients(ctx context.Con
 			GrantMethod:  oauthv1.GrantHandlerAuto,
 		},
 	} {
-		if err := ensureOAuthClient(ctx, c.oauthClientClient, client); err != nil {
+		if err := ensureOAuthClient(ctx, c.oauthClientClient, c.oauthClientLister, client); err != nil {
 			return fmt.Errorf("unable to ensure existence of a bootstrapped OAuth client %q: %w", client.Name, err)
 		}
 	}
@@ -158,16 +158,24 @@ func randomBits(bits uint) []byte {
 	return b
 }
 
-func ensureOAuthClient(ctx context.Context, oauthClients oauthclient.OAuthClientInterface, client oauthv1.OAuthClient) error {
-	_, err := oauthClients.Create(ctx, &client, metav1.CreateOptions{})
-	if err == nil || !apierrors.IsAlreadyExists(err) {
+func ensureOAuthClient(ctx context.Context, oauthClients oauthclient.OAuthClientInterface, oauthClientLister oauthv1listers.OAuthClientLister, client oauthv1.OAuthClient) error {
+	_, err := oauthClientLister.Get(client.Name)
+	if apierrors.IsNotFound(err) {
+		_, err = oauthClients.Create(ctx, &client, metav1.CreateOptions{})
 		return err
+	} else if err != nil {
+		if _, err = oauthClients.Get(ctx, client.Name, metav1.GetOptions{}); err != nil {
+			return err
+		}
 	}
 
 	return retry.RetryOnConflict(retry.DefaultRetry, func() error {
-		existing, err := oauthClients.Get(ctx, client.Name, metav1.GetOptions{})
+		existing, err := oauthClientLister.Get(client.Name)
 		if err != nil {
-			return err
+			existing, err = oauthClients.Get(ctx, client.Name, metav1.GetOptions{})
+			if err != nil {
+				return err
+			}
 		}
 
 		existingCopy := existing.DeepCopy()
